@@ -513,15 +513,11 @@ void LoRanTX() // Transimits the Data via the LoRan Module
   uint8_t Gsec = GPS.seconds;
   uint8_t Gmin = GPS.minute;
   int Ghouint = GPS.hour - MST;
-  if (Ghouint < 0)
-  {
-    Ghouint += 24;
-  }
-  uint8_t Ghou = Ghouint;
+  Ghouint += DAYLIGHT;
+
   uint8_t Gdays = GPS.day;
   uint8_t Gmon = GPS.month;
   uint8_t Gyea = GPS.year;
-  Ghou += DAYLIGHT;
   // Get BPSK Time in local variables
   uint8_t Bsec = tohex(dt_array_global[DT_SECOND]);
   uint8_t Bmin = tohex(dt_array_global[DT_MINUTE]);
@@ -529,6 +525,7 @@ void LoRanTX() // Transimits the Data via the LoRan Module
   uint8_t Bdays = tohex(dt_array_global[DT_DAY]);
   uint8_t Bmon = tohex(dt_array_global[DT_MONTH]);
   uint8_t Byea = tohex(dt_array_global[DT_YEAR]);
+  
   // If the hour of the BPSK transmission is less than 7 AM during standard time or 6 AM during daylight savings time
   if (Bhou < (MST - DAYLIGHT))
   {
@@ -540,7 +537,7 @@ void LoRanTX() // Transimits the Data via the LoRan Module
       int monthsOfThirtyOne[7] = {1, 3, 5, 7, 8, 10, 12};
       for (int i = 0; i < 6; i++)
       {
-        if (monthsOfThirtyOne[i] == Bmon)
+        if (monthsOfThirtyOne[i] == Bmon - 1)
         {
           Bdays = 31;
         }
@@ -549,6 +546,7 @@ void LoRanTX() // Transimits the Data via the LoRan Module
       {
         Bdays = 30;
       }
+      Bmon--;
     }
     // If it isn't the first, you can just make the day go back by one
     else
@@ -561,6 +559,36 @@ void LoRanTX() // Transimits the Data via the LoRan Module
   {
     Bhou = Bhou - MST + DAYLIGHT;
   }
+
+  if (Ghouint < 0)
+  {
+    // Shift the GPS hour variable to the appropriate time in 24h format
+    Ghouint += 24; 
+    // if it says that this is the 1st of the month, it isn't because MST/MDT hasn't reached the new day yet, so change the day and month accordingly
+    if (Gdays == 1)
+    {
+      int monthsOfThirtyOne[7] = {1, 3, 5, 7, 8, 10, 12};
+      for (int i = 0; i < 6; i++)
+      {
+        if (monthsOfThirtyOne[i] == Gmon)
+        {
+          Gdays = 31;
+        }
+      }
+      if (Gdays != 31)
+      {
+        Gdays = 30;
+      }
+      Gmon--;
+    }
+    // If it isn't the first, you can just make the day go back by one
+    else
+    {
+      Gdays--;
+    }
+  }
+  // Set the time packet Variable
+  uint8_t Ghou = Ghouint;
   // Establish the time packet to be sent via LoRan, order is very important for the correct functioning of the RX module
   uint8_t timepacket[] = {WWVAMTimeCode, Whou, Wmin, Wsec, Wmon, Wdays, Wyea, Wsyncmin, 
                           GPSTimeCode, Ghou, Gmin, Gsec, Gmon, Gdays, Gyea, WWVBPSKTimeCode, 
@@ -752,7 +780,7 @@ void WWVTime() // For displaying the WWV AM time on the serial monitor
   mon = month();
   yea = year();
   // Prints Time Type
-  Serial.print(F("WWV AM: "));
+  Serial.print(F("WWVB AM: "));
   // Prints current hour on screen
   if (hou > 12)
   {
@@ -812,7 +840,7 @@ void showTime()
   // Otherwise, show that a sync hasn't been attained
   else
   {
-    Serial.print(F("WWV AM sync not yet available "));
+    Serial.print(F("WWVB AM sync not yet available "));
   }
 }
 
@@ -825,12 +853,43 @@ void GPSTime() // For displaying GPS time on the serial monitor
   int gsec = GPS.seconds;
   // FOLLOWS THE SAME PROTOCOL AS THE WWV AM DISPLAYING, SEE IT FOR REFERENCE IF NEEDED
   Serial.print(F(" GPS: "));
-
-  Serial.print(int(GPS.month));
+  int gdays = int(GPS.day);
+  int gmonths = int(GPS.month);
+  int gyears = int(GPS.year);
+  bool shifted = false;
+  if (ghour < 0)
+  {
+    // Shift the GPS hour variable to the appropriate time in 24h format
+    ghour += 12;
+    shifted = true; 
+    // if it says that this is the 1st of the month, it isn't because MST/MDT hasn't reached the new day yet, so change the day and month accordingly
+    if (gdays == 1)
+    {
+      int monthsOfThirtyOne[7] = {1, 3, 5, 7, 8, 10, 12};
+      for (int i = 0; i < 6; i++)
+      {
+        if (monthsOfThirtyOne[i] == gmonths)
+        {
+          gdays = 31;
+        }
+      }
+      if (gdays != 31)
+      {
+        gdays = 30;
+      }
+      gmonths--;
+    }
+    // If it isn't the first, you can just make the day go back by one
+    else
+    {
+      gdays--;
+    }
+  }
+  Serial.print(gmonths);
   Serial.print("/");
-  Serial.print(int(GPS.day));
+  Serial.print(gdays);
   Serial.print("/");
-  Serial.print(int(GPS.year));
+  Serial.print(gyears);
   Serial.print(" ");
 
   if (ghour > 12)
@@ -858,8 +917,12 @@ void GPSTime() // For displaying GPS time on the serial monitor
     Serial.print(F("0"));
   }
   Serial.print(gsec);
-  // If the time is negative or it is midnight, then it is AM
-  if (ghour > 23 || ghour < -11)
+  // If the time is less than negative 11 or it is midnight, then it is AM
+  if (shifted == true)
+  {
+    Serial.println(F(" PM"));
+  }
+  else if (ghour > 23 || ghour < -11)
   {
     Serial.println(F(" AM"));
   }
@@ -909,7 +972,7 @@ void loop() {
     checkRadioData();
   }
   // If it has been more than 30 minutes since the last WWV AM sync and BPSK sync
-  if ((now() - goodstuff) / 60 > 30 && (millis() - BPSKtimer > 1800000))
+  if ((now() - goodstuff) / 60 > 2 && (millis() - BPSKtimer > 10000))
   {
     // As long as there has been at least one WWV AM Sync
     if (starttime > 0)

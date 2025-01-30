@@ -59,6 +59,7 @@ int BPGood = 0;
 
 // if the LoRan module has started
 bool loranStart = false;
+bool recievingData = false;
 // ========================================================================= ALL FUNCTIONS ========================================================
 // --------------------------------------------------------------- LORAN FUNCTIONS ---------------------------------------------------------------
 void LoRanSetup() // Initializing the Loran Module
@@ -111,6 +112,7 @@ void LoRanRx() // For recieving data
       // Log the data into an array
       loranStart = true;
       LogData();
+      recievingData = true;
     } else {
       // Or print that it wasn't able to recieve the signal
       Serial.println("Receive failed");
@@ -152,9 +154,8 @@ void LogData()
   Gday = buf[13];
   Gyear = buf[14];
 
-  Serial.print(buf[15]);
   // If there is a good BPSK sync, then set the time accordingly
-  if (buf[15] == 80 && millis() - BPTimer > 10000)
+  if (buf[15] == 80 && (millis() - BPTimer) > 3000)
   {
     int Bhour = buf[16];
     int Bminute = buf[17];
@@ -176,9 +177,17 @@ void LogData()
 void SerialDataDisplay()
 {
   // Cycle through all of the differerent displaying functions
-  WWVAMSerialDisp();
-  GPSSerialDisp();
-  WWVBPSKSerialDisp();
+  if (recievingData == true)
+  {
+    WWVAMSerialDisp();
+    GPSSerialDisp();
+    WWVBPSKSerialDisp();
+    Serial.println(" ");
+  }
+  else 
+  {
+    Serial.println("Not receiving data, likely due to BPSK sync process, Waiting for next transmission");
+  }
 }
 
 void WWVAMSerialDisp()
@@ -187,7 +196,7 @@ void WWVAMSerialDisp()
   if (Whour != DUMMY)
   {
     // Print all of this data (this is the same process as is used on the TX arduino, reference this for a more detailed breakdown)
-    Serial.print("WWV: ");
+    Serial.print("WWVB AM: ");
     if (Whour > 12)
     {
       Serial.print(Whour - 12);
@@ -260,7 +269,25 @@ void GPSSerialDisp()
   Serial.print("/");
   Serial.print(Gday);
   Serial.print("/");
-  Serial.println(Gyear + 2000);
+  Serial.print(Gyear + 2000);
+
+  if (Whour != DUMMY)
+  {
+    Serial.print(" WWVB AM and GPS time difference: ");
+    int timeDelta = 0;
+    if (Wsecond > Gsecond)
+    {
+      Serial.print("WWVB AM is greater by ");
+      timeDelta = Wsecond - Gsecond;
+    }
+    else if (Gsecond > Wsecond)
+    {
+      Serial.print("GPS is greater by ");
+      timeDelta = Gsecond - Wsecond;
+    }
+    Serial.print(timeDelta);
+    Serial.print(" seconds ");
+  }
 }
 
 void WWVBPSKSerialDisp()
@@ -307,7 +334,7 @@ void WWVBPSKSerialDisp()
     Serial.print("/");
     Serial.print(d);
     Serial.print("/");
-    Serial.println(y);
+    Serial.print(y);
   }
 }
 
@@ -324,5 +351,6 @@ void loop() {
   { 
     SerialDataDisplay();
     dtimer = millis();
+    recievingData = false;
   }
 }
