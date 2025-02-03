@@ -972,7 +972,7 @@ void loop() {
     checkRadioData();
   }
   // If it has been more than 30 minutes since the last WWV AM sync and BPSK sync
-  if ((now() - goodstuff) / 60 > 2 && (millis() - BPSKtimer > 10000))
+  if ((now() - goodstuff) / 60 > 30 && (millis() - BPSKtimer > 1800000))
   {
     // As long as there has been at least one WWV AM Sync
     if (starttime > 0)
