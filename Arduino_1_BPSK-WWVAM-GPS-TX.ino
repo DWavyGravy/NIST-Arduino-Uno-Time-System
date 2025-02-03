@@ -448,7 +448,7 @@ void LoRanSetup() // Sets up LoRan Module
 
 void LoRanTX() // Transimits the Data via the LoRan Module
 {
-  Serial.print(F("Transmitting LoRan "));
+  Serial.print(F("Transmitting LoRa "));
   // Increment the WWVAM indicator if there is no data
   if (starttime < 1)
   {
